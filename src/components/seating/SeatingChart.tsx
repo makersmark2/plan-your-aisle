@@ -24,6 +24,7 @@ export interface TableData {
   x: number;
   y: number;
   guests: { [seatNumber: number]: Guest };
+  description?: string;
 }
 
 const SeatingChart = () => {
@@ -33,6 +34,9 @@ const SeatingChart = () => {
     seatNumber: number;
   } | null>(null);
   const [showTableCreator, setShowTableCreator] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(true);
+  const [expectedGuestCount, setExpectedGuestCount] = useState(0);
+  const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [nextTableNumber, setNextTableNumber] = useState(1);
 
@@ -92,15 +96,91 @@ const SeatingChart = () => {
     toast.success("Guest removed from seat");
   }, [selectedSeat]);
 
+  const updateTableNumber = useCallback((tableId: string, newNumber: number) => {
+    setTables(prev => prev.map(table => 
+      table.id === tableId ? { ...table, number: newNumber } : table
+    ));
+    setEditingTableId(null);
+    toast.success("Table number updated");
+  }, []);
+
+  const updateTableDescription = useCallback((tableId: string, description: string) => {
+    setTables(prev => prev.map(table => 
+      table.id === tableId ? { ...table, description } : table
+    ));
+    toast.success("Table description updated");
+  }, []);
+
   const exportToPNG = useCallback(() => {
-    // Implementation for PNG export would go here
-    toast.success("Seating chart exported as PNG");
+    if (!canvasRef.current) return;
+    
+    // Create a temporary canvas for export
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scale = 3; // High resolution
+    canvas.width = rect.width * scale;
+    canvas.height = rect.height * scale;
+    ctx.scale(scale, scale);
+    
+    // Set background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    
+    // Convert HTML to canvas using html2canvas would be ideal here
+    // For now, trigger download of a placeholder
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'seating-chart.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success("Seating chart exported as PNG");
+      }
+    });
   }, []);
 
   const exportToCSV = useCallback(() => {
-    // Implementation for CSV export would go here
+    const csvData = [];
+    csvData.push(['Table Number', 'Seat Number', 'First Name', 'Last Name', 'Entree', 'Allergy Info']);
+    
+    tables.forEach(table => {
+      for (let seatNum = 1; seatNum <= table.seats; seatNum++) {
+        const guest = table.guests[seatNum];
+        if (guest) {
+          csvData.push([
+            table.number.toString(),
+            seatNum.toString(),
+            guest.firstName,
+            guest.lastName,
+            guest.entree,
+            guest.hasAllergy ? guest.allergyDetails || 'Yes' : 'No'
+          ]);
+        }
+      }
+    });
+    
+    const csvContent = csvData.map(row => 
+      row.map(field => `"${field}"`).join(',')
+    ).join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'guest-list.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     toast.success("Guest list exported as CSV");
-  }, []);
+  }, [tables]);
 
   // Calculate guest statistics
   const totalSeats = tables.reduce((sum, table) => sum + table.seats, 0);
@@ -138,7 +218,17 @@ const SeatingChart = () => {
       {/* Stats Bar */}
       <div className="border-b bg-card/30 backdrop-blur-sm">
         <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">Expected Guests:</span>
+              <input
+                type="number"
+                value={expectedGuestCount}
+                onChange={(e) => setExpectedGuestCount(Number(e.target.value))}
+                className="w-16 px-2 py-1 text-sm border rounded bg-background"
+                min="0"
+              />
+            </div>
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
               <span className="font-medium">Guests Placed:</span>
@@ -170,13 +260,31 @@ const SeatingChart = () => {
             <Card className="p-6 shadow-elegant">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-serif font-semibold">Venue Layout</h2>
-                <Button 
-                  onClick={() => setShowTableCreator(true)}
-                  className="gap-2 bg-gradient-wedding hover:opacity-90"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Table
-                </Button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-background rounded-lg border">
+                    <span className="text-sm font-medium">
+                      {isEditMode ? 'Edit Mode' : 'View Mode'}
+                    </span>
+                    <button
+                      onClick={() => setIsEditMode(!isEditMode)}
+                      className={`w-10 h-5 rounded-full transition-colors ${
+                        isEditMode ? 'bg-primary' : 'bg-muted'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                        isEditMode ? 'translate-x-5' : 'translate-x-0.5'
+                      }`} />
+                    </button>
+                  </div>
+                  <Button 
+                    onClick={() => setShowTableCreator(true)}
+                    className="gap-2 bg-gradient-wedding hover:opacity-90"
+                    disabled={!isEditMode}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Table
+                  </Button>
+                </div>
               </div>
               
               <div 
@@ -188,10 +296,15 @@ const SeatingChart = () => {
                   <TableComponent
                     key={table.id}
                     table={table}
+                    isEditMode={isEditMode}
                     onPositionChange={updateTablePosition}
                     onSeatClick={(seatNumber) => 
-                      setSelectedSeat({ tableId: table.id, seatNumber })
+                      isEditMode && setSelectedSeat({ tableId: table.id, seatNumber })
                     }
+                    onTableNumberEdit={(tableId) => setEditingTableId(tableId)}
+                    onTableNumberUpdate={updateTableNumber}
+                    onTableDescriptionUpdate={updateTableDescription}
+                    isEditingNumber={editingTableId === table.id}
                   />
                 ))}
                 
@@ -220,14 +333,14 @@ const SeatingChart = () => {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {showTableCreator && (
+            {showTableCreator && isEditMode && (
               <TableCreator
                 onAddTable={addTable}
                 onCancel={() => setShowTableCreator(false)}
               />
             )}
             
-            {selectedSeat && (
+            {selectedSeat && isEditMode && (
               <GuestForm
                 guest={selectedGuest}
                 tableNumber={selectedTable?.number || 0}
@@ -238,7 +351,7 @@ const SeatingChart = () => {
               />
             )}
             
-            {!showTableCreator && !selectedSeat && (
+            {!showTableCreator && !selectedSeat && isEditMode && (
               <Card className="p-6">
                 <h3 className="text-lg font-serif font-semibold mb-4">
                   Getting Started

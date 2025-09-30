@@ -4,31 +4,47 @@ import { Badge } from "@/components/ui/badge";
 
 interface TableComponentProps {
   table: TableData;
+  isEditMode: boolean;
   onPositionChange: (tableId: string, x: number, y: number) => void;
   onSeatClick: (seatNumber: number) => void;
+  onTableNumberEdit: (tableId: string) => void;
+  onTableNumberUpdate: (tableId: string, number: number) => void;
+  onTableDescriptionUpdate: (tableId: string, description: string) => void;
+  isEditingNumber: boolean;
 }
 
-export const TableComponent = ({ table, onPositionChange, onSeatClick }: TableComponentProps) => {
+export const TableComponent = ({ 
+  table, 
+  isEditMode, 
+  onPositionChange, 
+  onSeatClick, 
+  onTableNumberEdit,
+  onTableNumberUpdate,
+  onTableDescriptionUpdate,
+  isEditingNumber 
+}: TableComponentProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [tempNumber, setTempNumber] = useState(table.number);
+  const [tempDescription, setTempDescription] = useState(table.description || '');
   const tableRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!tableRef.current) return;
+    if (!isEditMode || !tableRef.current) return;
     
     const rect = tableRef.current.getBoundingClientRect();
     const parentRect = tableRef.current.parentElement?.getBoundingClientRect();
     
     if (parentRect) {
       setDragOffset({
-        x: e.clientX - rect.left - parentRect.left,
-        y: e.clientY - rect.top - parentRect.top,
+        x: e.clientX - parentRect.left - table.x,
+        y: e.clientY - parentRect.top - table.y,
       });
     }
     
     setIsDragging(true);
     e.preventDefault();
-  }, []);
+  }, [isEditMode, table.x, table.y]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging || !tableRef.current?.parentElement) return;
@@ -72,27 +88,36 @@ export const TableComponent = ({ table, onPositionChange, onSeatClick }: TableCo
         seatX = tableWidth / 2 + Math.cos(angle) * radius - seatSize / 2;
         seatY = tableHeight / 2 + Math.sin(angle) * radius - seatSize / 2;
       } else {
-        // Arrange seats around rectangle perimeter
-        const perimeter = 2 * (tableWidth + tableHeight);
-        const seatSpacing = perimeter / table.seats;
-        const position = (i - 1) * seatSpacing;
+        // Rectangle table: 1 seat centered on each short side, remaining on long sides
+        const longSideSeats = Math.max(0, table.seats - 2);
+        const seatsPerLongSide = Math.floor(longSideSeats / 2);
+        const extraSeats = longSideSeats % 2;
         
-        if (position <= tableWidth) {
-          // Top edge
-          seatX = position - seatSize / 2;
+        if (i === 1) {
+          // Top short side - centered
+          seatX = tableWidth / 2 - seatSize / 2;
           seatY = -seatSize - 5;
-        } else if (position <= tableWidth + tableHeight) {
-          // Right edge
-          seatX = tableWidth + 5;
-          seatY = (position - tableWidth) - seatSize / 2;
-        } else if (position <= tableWidth * 2 + tableHeight) {
-          // Bottom edge
-          seatX = tableWidth - (position - tableWidth - tableHeight) - seatSize / 2;
+        } else if (i === 2) {
+          // Bottom short side - centered
+          seatX = tableWidth / 2 - seatSize / 2;
           seatY = tableHeight + 5;
         } else {
-          // Left edge
-          seatX = -seatSize - 5;
-          seatY = tableHeight - (position - tableWidth * 2 - tableHeight) - seatSize / 2;
+          // Remaining seats on long sides
+          const sideIndex = i - 3;
+          const topSideSeats = seatsPerLongSide + extraSeats;
+          
+          if (sideIndex < topSideSeats) {
+            // Right side
+            const spacing = tableHeight / (topSideSeats + 1);
+            seatX = tableWidth + 5;
+            seatY = spacing * (sideIndex + 1) - seatSize / 2;
+          } else {
+            // Left side
+            const leftIndex = sideIndex - topSideSeats;
+            const spacing = tableHeight / (seatsPerLongSide + 1);
+            seatX = -seatSize - 5;
+            seatY = tableHeight - spacing * (leftIndex + 1) - seatSize / 2;
+          }
         }
       }
       
@@ -102,20 +127,20 @@ export const TableComponent = ({ table, onPositionChange, onSeatClick }: TableCo
       seats.push(
         <div
           key={i}
-          className={`absolute w-6 h-6 rounded-full border-2 cursor-pointer transition-all duration-200 flex items-center justify-center text-xs font-medium ${
+          className={`absolute w-6 h-6 rounded-full border-2 transition-all duration-200 flex items-center justify-center text-xs font-medium ${
             hasGuest 
               ? 'bg-primary border-primary text-primary-foreground hover:scale-110' 
               : 'bg-background border-border hover:border-primary hover:scale-110'
-          }`}
+          } ${isEditMode ? 'cursor-pointer' : 'cursor-default'}`}
           style={{
             left: seatX,
             top: seatY,
           }}
           onClick={(e) => {
             e.stopPropagation();
-            onSeatClick(i);
+            if (isEditMode) onSeatClick(i);
           }}
-          title={hasGuest ? `${guest.firstName} ${guest.lastName}` : `Seat ${i}`}
+          title={!isEditMode && hasGuest ? `${guest.firstName} ${guest.lastName}` : `Seat ${i}`}
         >
           {i}
         </div>
@@ -128,9 +153,9 @@ export const TableComponent = ({ table, onPositionChange, onSeatClick }: TableCo
   return (
     <div
       ref={tableRef}
-      className={`absolute cursor-move select-none animate-table-drop ${
+      className={`absolute select-none animate-table-drop ${
         isDragging ? 'z-10 scale-105' : 'z-0'
-      }`}
+      } ${isEditMode ? 'cursor-move' : 'cursor-default'}`}
       style={{
         left: table.x,
         top: table.y,
@@ -149,10 +174,52 @@ export const TableComponent = ({ table, onPositionChange, onSeatClick }: TableCo
           height: table.type === "round" ? "120px" : "80px",
         }}
       >
-        <div className="flex items-center justify-center h-full">
-          <Badge variant="outline" className="font-semibold">
-            Table {table.number}
-          </Badge>
+        <div className="flex flex-col items-center justify-center h-full p-1">
+          {isEditingNumber ? (
+            <input
+              type="number"
+              value={tempNumber}
+              onChange={(e) => setTempNumber(Number(e.target.value))}
+              onBlur={() => onTableNumberUpdate(table.id, tempNumber)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onTableNumberUpdate(table.id, tempNumber);
+                if (e.key === 'Escape') {
+                  setTempNumber(table.number);
+                  onTableNumberUpdate(table.id, table.number);
+                }
+              }}
+              className="w-12 text-xs text-center border rounded bg-background"
+              autoFocus
+            />
+          ) : (
+            <Badge 
+              variant="outline" 
+              className={`font-semibold text-xs ${isEditMode ? 'cursor-pointer' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isEditMode) onTableNumberEdit(table.id);
+              }}
+            >
+              Table {table.number}
+            </Badge>
+          )}
+          {table.description && (
+            <div className="text-xs text-muted-foreground mt-1 max-w-full truncate">
+              {table.description}
+            </div>
+          )}
+          {isEditMode && !table.description && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const description = prompt('Enter table description:');
+                if (description) onTableDescriptionUpdate(table.id, description);
+              }}
+              className="text-xs text-muted-foreground mt-1 hover:text-foreground"
+            >
+              + Add description
+            </button>
+          )}
         </div>
       </div>
       
