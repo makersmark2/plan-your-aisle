@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { User, Utensils, AlertTriangle, X } from "lucide-react";
+import { User, Utensils, TriangleAlert as AlertTriangle, X } from "lucide-react";
 import { Guest } from "./SeatingChart";
 
 interface GuestFormProps {
@@ -167,10 +167,10 @@ export const GuestForm = ({
         <CardFooter className="flex gap-3">
           <Button 
             type="submit" 
-            className="flex-1 bg-gradient-wedding hover:opacity-90"
+            className="flex-1 bg-gradient-wedding hover:opacity-90 transition-all"
             disabled={!formData.firstName.trim() || !formData.lastName.trim()}
           >
-            {guest ? "Update Guest" : "Assign Guest"}
+            {guest ? "Update & Next" : "Assign & Next"}
           </Button>
           
           {onRemove && (

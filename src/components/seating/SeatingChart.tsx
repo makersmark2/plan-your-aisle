@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, FileText, Users, MapPin, Plus, ZoomOut } from "lucide-react";
+import { Download, FileText, Users, MapPin, Plus, ZoomOut, ZoomIn } from "lucide-react";
 import { TableComponent } from "./Table";
 import { GuestForm } from "./GuestForm";
 import { TableCreator } from "./TableCreator";
@@ -41,6 +41,13 @@ const SeatingChart = () => {
   const [canvasScale, setCanvasScale] = useState(1);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [nextTableNumber, setNextTableNumber] = useState(1);
+  const [hoveredSeat, setHoveredSeat] = useState<{
+    tableId: string;
+    seatNumber: number;
+    guest: Guest;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const addTable = useCallback((type: "round" | "rectangle", seats: number) => {
     const newTable: TableData = {
@@ -64,6 +71,18 @@ const SeatingChart = () => {
     ));
   }, []);
 
+  const findNextAvailableSeat = useCallback((tableId: string) => {
+    const table = tables.find(t => t.id === tableId);
+    if (!table) return null;
+    
+    for (let seatNum = 1; seatNum <= table.seats; seatNum++) {
+      if (!table.guests[seatNum]) {
+        return seatNum;
+      }
+    }
+    return null;
+  }, [tables]);
+
   const updateGuest = useCallback((guest: Guest) => {
     if (!selectedSeat) return;
     
@@ -79,9 +98,19 @@ const SeatingChart = () => {
       }
       return table;
     }));
-    setSelectedSeat(null);
+    
+    // Auto-select next available seat at the same table
+    const nextSeat = findNextAvailableSeat(selectedSeat.tableId);
+    if (nextSeat) {
+      setSelectedSeat({
+        tableId: selectedSeat.tableId,
+        seatNumber: nextSeat
+      });
+    } else {
+      setSelectedSeat(null);
+    }
     toast.success("Guest assigned to seat");
-  }, [selectedSeat]);
+  }, [selectedSeat, findNextAvailableSeat]);
 
   const removeGuest = useCallback(() => {
     if (!selectedSeat) return;
@@ -108,6 +137,10 @@ const SeatingChart = () => {
 
   const handleZoomOut = () => {
     setCanvasScale(Math.max(0.5, canvasScale - 0.1));
+  };
+
+  const handleZoomIn = () => {
+    setCanvasScale(Math.min(2, canvasScale + 0.1));
   };
 
   const exportToPNG = useCallback(async () => {
@@ -200,6 +233,10 @@ const SeatingChart = () => {
                 <ZoomOut className="h-4 w-4" />
                 Zoom Out
               </Button>
+              <Button variant="outline" onClick={handleZoomIn} className="gap-2">
+                <ZoomIn className="h-4 w-4" />
+                Zoom In
+              </Button>
             </div>
           </div>
         </div>
@@ -289,6 +326,27 @@ const SeatingChart = () => {
                     width: `${100 / canvasScale}%`,
                   }}
                 >
+                  {/* Hover tooltip */}
+                  {hoveredSeat && !isEditMode && (
+                    <div
+                      className="absolute z-50 bg-card border border-border rounded-lg shadow-elegant px-3 py-2 pointer-events-none"
+                      style={{
+                        left: hoveredSeat.x,
+                        top: hoveredSeat.y - 40,
+                        transform: 'translateX(-50%)'
+                      }}
+                    >
+                      <p className="text-sm font-medium">
+                        {hoveredSeat.guest.firstName} {hoveredSeat.guest.lastName}
+                      </p>
+                      {hoveredSeat.guest.entree && (
+                        <p className="text-xs text-muted-foreground">
+                          {hoveredSeat.guest.entree}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
                   {tables.map((table) => (
                     <TableComponent
                       key={table.id}
@@ -298,6 +356,12 @@ const SeatingChart = () => {
                       onSeatClick={(seatNumber) => 
                         isEditMode && setSelectedSeat({ tableId: table.id, seatNumber })
                       }
+                      onSeatHover={(seatNumber, guest, x, y) => {
+                        if (!isEditMode && guest) {
+                          setHoveredSeat({ tableId: table.id, seatNumber, guest, x, y });
+                        }
+                      }}
+                      onSeatLeave={() => setHoveredSeat(null)}
                       onTableNumberEdit={(tableId) => setEditingTableId(tableId)}
                       onTableNumberUpdate={updateTableNumber}
                       isEditingNumber={editingTableId === table.id}

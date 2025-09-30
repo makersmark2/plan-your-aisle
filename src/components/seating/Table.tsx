@@ -7,6 +7,8 @@ interface TableComponentProps {
   isEditMode: boolean;
   onPositionChange: (tableId: string, x: number, y: number) => void;
   onSeatClick: (seatNumber: number) => void;
+  onSeatHover: (seatNumber: number, guest: Guest | null, x: number, y: number) => void;
+  onSeatLeave: () => void;
   onTableNumberEdit: (tableId: string) => void;
   onTableNumberUpdate: (tableId: string, number: number) => void;
   isEditingNumber: boolean;
@@ -17,6 +19,8 @@ export const TableComponent = ({
   isEditMode, 
   onPositionChange, 
   onSeatClick, 
+  onSeatHover,
+  onSeatLeave,
   onTableNumberEdit,
   onTableNumberUpdate,
   isEditingNumber 
@@ -136,6 +140,22 @@ export const TableComponent = ({
           onClick={(e) => {
             e.stopPropagation();
             if (isEditMode) onSeatClick(i);
+          }}
+          onMouseEnter={(e) => {
+            if (!isEditMode && hasGuest) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const parentRect = tableRef.current?.getBoundingClientRect();
+              if (parentRect) {
+                const relativeX = rect.left - parentRect.left + rect.width / 2;
+                const relativeY = rect.top - parentRect.top;
+                onSeatHover(i, guest, relativeX, relativeY);
+              }
+            }
+          }}
+          onMouseLeave={() => {
+            if (!isEditMode) {
+              onSeatLeave();
+            }
           }}
           title={hasGuest && !isEditMode ? `${guest.firstName} ${guest.lastName}` : `Seat ${i}`}
         >
