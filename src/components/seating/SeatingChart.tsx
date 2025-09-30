@@ -2,10 +2,11 @@ import { useState, useRef, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, FileText, Users, MapPin, Plus, ZoomOut, ZoomIn } from "lucide-react";
+import { Download, FileText, Users, MapPin, Plus, ZoomOut, ZoomIn, Settings } from "lucide-react";
 import { TableComponent } from "./Table";
 import { GuestForm } from "./GuestForm";
 import { TableCreator } from "./TableCreator";
+import { SettingsPanel } from "./SettingsPanel";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 
@@ -45,9 +46,18 @@ const SeatingChart = () => {
     tableId: string;
     seatNumber: number;
     guest: Guest;
-    x: number;
-    y: number;
+    mouseX: number;
+    mouseY: number;
   } | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [customEntrees, setCustomEntrees] = useState<string[]>([
+    "Beef Tenderloin",
+    "Grilled Salmon", 
+    "Chicken Breast",
+    "Vegetarian Pasta",
+    "Vegan Buddha Bowl"
+  ]);
+  const [showGuestModal, setShowGuestModal] = useState(false);
 
   const addTable = useCallback((type: "round" | "rectangle", seats: number) => {
     const newTable: TableData = {
@@ -108,6 +118,7 @@ const SeatingChart = () => {
       });
     } else {
       setSelectedSeat(null);
+      setShowGuestModal(false);
     }
     toast.success("Guest assigned to seat");
   }, [selectedSeat, findNextAvailableSeat]);
@@ -124,6 +135,7 @@ const SeatingChart = () => {
       return table;
     }));
     setSelectedSeat(null);
+    setShowGuestModal(false);
     toast.success("Guest removed from seat");
   }, [selectedSeat]);
 
@@ -143,6 +155,18 @@ const SeatingChart = () => {
     setCanvasScale(Math.min(2, canvasScale + 0.1));
   };
 
+  const handleSeatClick = useCallback((tableId: string, seatNumber: number) => {
+    if (isEditMode) {
+      setSelectedSeat({ tableId, seatNumber });
+      setShowGuestModal(true);
+    }
+  }, [isEditMode]);
+
+  const handleSeatHover = useCallback((tableId: string, seatNumber: number, guest: Guest | null, mouseX: number, mouseY: number) => {
+    if (!isEditMode && guest) {
+      setHoveredSeat({ tableId, seatNumber, guest, mouseX, mouseY });
+    }
+  }, [isEditMode]);
   const exportToPNG = useCallback(async () => {
     if (!canvasRef.current) return;
     
@@ -237,6 +261,10 @@ const SeatingChart = () => {
                 <ZoomIn className="h-4 w-4" />
                 Zoom In
               </Button>
+              <Button variant="outline" onClick={() => setShowSettings(true)} className="gap-2">
+                <Settings className="h-4 w-4" />
+                Settings
+              </Button>
             </div>
           </div>
         </div>
@@ -329,11 +357,11 @@ const SeatingChart = () => {
                   {/* Hover tooltip */}
                   {hoveredSeat && !isEditMode && (
                     <div
-                      className="absolute z-50 bg-card border border-border rounded-lg shadow-elegant px-3 py-2 pointer-events-none"
+                      className="fixed z-50 bg-card border border-border rounded-lg shadow-elegant px-3 py-2 pointer-events-none max-w-xs"
                       style={{
-                        left: hoveredSeat.x,
-                        top: hoveredSeat.y - 40,
-                        transform: 'translateX(-50%)'
+                        left: hoveredSeat.mouseX + 10,
+                        top: hoveredSeat.mouseY - 10,
+                        transform: 'translateY(-100%)'
                       }}
                     >
                       <p className="text-sm font-medium">
@@ -354,13 +382,11 @@ const SeatingChart = () => {
                       isEditMode={isEditMode}
                       onPositionChange={updateTablePosition}
                       onSeatClick={(seatNumber) => 
-                        isEditMode && setSelectedSeat({ tableId: table.id, seatNumber })
+                        handleSeatClick(table.id, seatNumber)
                       }
-                      onSeatHover={(seatNumber, guest, x, y) => {
-                        if (!isEditMode && guest) {
-                          setHoveredSeat({ tableId: table.id, seatNumber, guest, x, y });
-                        }
-                      }}
+                      onSeatHover={(seatNumber, guest, mouseX, mouseY) => 
+                        handleSeatHover(table.id, seatNumber, guest, mouseX, mouseY)
+                      }
                       onSeatLeave={() => setHoveredSeat(null)}
                       onTableNumberEdit={(tableId) => setEditingTableId(tableId)}
                       onTableNumberUpdate={updateTableNumber}
@@ -401,18 +427,7 @@ const SeatingChart = () => {
               />
             )}
             
-            {selectedSeat && isEditMode && (
-              <GuestForm
-                guest={selectedGuest}
-                tableNumber={selectedTable?.number || 0}
-                seatNumber={selectedSeat.seatNumber}
-                onSave={updateGuest}
-                onRemove={selectedGuest ? removeGuest : undefined}
-                onCancel={() => setSelectedSeat(null)}
-              />
-            )}
-            
-            {!showTableCreator && !selectedSeat && isEditMode && (
+            {!showTableCreator && isEditMode && (
               <Card className="p-6">
                 <h3 className="text-lg font-serif font-semibold mb-4">
                   Getting Started
@@ -428,6 +443,31 @@ const SeatingChart = () => {
           </div>
         </div>
       </div>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <SettingsPanel
+          customEntrees={customEntrees}
+          onUpdateEntrees={setCustomEntrees}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* Guest Assignment Modal */}
+      {showGuestModal && selectedSeat && (
+        <GuestForm
+          guest={selectedGuest}
+          tableNumber={selectedTable?.number || 0}
+          seatNumber={selectedSeat.seatNumber}
+          customEntrees={customEntrees}
+          onSave={updateGuest}
+          onRemove={selectedGuest ? removeGuest : undefined}
+          onCancel={() => {
+            setSelectedSeat(null);
+            setShowGuestModal(false);
+          }}
+        />
+      )}
     </div>
   );
 };

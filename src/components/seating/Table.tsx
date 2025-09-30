@@ -7,7 +7,7 @@ interface TableComponentProps {
   isEditMode: boolean;
   onPositionChange: (tableId: string, x: number, y: number) => void;
   onSeatClick: (seatNumber: number) => void;
-  onSeatHover: (seatNumber: number, guest: Guest | null, x: number, y: number) => void;
+  onSeatHover: (seatNumber: number, guest: Guest | null, mouseX: number, mouseY: number) => void;
   onSeatLeave: () => void;
   onTableNumberEdit: (tableId: string) => void;
   onTableNumberUpdate: (tableId: string, number: number) => void;
@@ -139,24 +139,14 @@ export const TableComponent = ({
           }}
           onClick={(e) => {
             e.stopPropagation();
-            if (isEditMode) onSeatClick(i);
+            onSeatClick(i);
           }}
-          onMouseEnter={(e) => {
-            if (!isEditMode && hasGuest) {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const parentRect = tableRef.current?.getBoundingClientRect();
-              if (parentRect) {
-                const relativeX = rect.left - parentRect.left + rect.width / 2;
-                const relativeY = rect.top - parentRect.top;
-                onSeatHover(i, guest, relativeX, relativeY);
-              }
+          onMouseMove={(e) => {
+            if (hasGuest) {
+              onSeatHover(i, guest, e.clientX, e.clientY);
             }
           }}
-          onMouseLeave={() => {
-            if (!isEditMode) {
-              onSeatLeave();
-            }
-          }}
+          onMouseLeave={onSeatLeave}
           title={hasGuest && !isEditMode ? `${guest.firstName} ${guest.lastName}` : `Seat ${i}`}
         >
           {i}
