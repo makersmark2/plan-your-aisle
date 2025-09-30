@@ -2,11 +2,12 @@ import { useState, useRef, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, FileText, Users, MapPin, Plus } from "lucide-react";
+import { Download, FileText, Users, MapPin, Plus, ZoomOut } from "lucide-react";
 import { TableComponent } from "./Table";
 import { GuestForm } from "./GuestForm";
 import { TableCreator } from "./TableCreator";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
 
 export interface Guest {
   firstName: string;
@@ -37,6 +38,7 @@ const SeatingChart = () => {
   const [isEditMode, setIsEditMode] = useState(true);
   const [expectedGuestCount, setExpectedGuestCount] = useState(0);
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
+  const [canvasScale, setCanvasScale] = useState(1);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [nextTableNumber, setNextTableNumber] = useState(1);
 
@@ -104,46 +106,30 @@ const SeatingChart = () => {
     toast.success("Table number updated");
   }, []);
 
-  const updateTableDescription = useCallback((tableId: string, description: string) => {
-    setTables(prev => prev.map(table => 
-      table.id === tableId ? { ...table, description } : table
-    ));
-    toast.success("Table description updated");
-  }, []);
+  const handleZoomOut = () => {
+    setCanvasScale(Math.max(0.5, canvasScale - 0.1));
+  };
 
-  const exportToPNG = useCallback(() => {
+  const exportToPNG = useCallback(async () => {
     if (!canvasRef.current) return;
     
-    // Create a temporary canvas for export
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scale = 3; // High resolution
-    canvas.width = rect.width * scale;
-    canvas.height = rect.height * scale;
-    ctx.scale(scale, scale);
-    
-    // Set background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, rect.width, rect.height);
-    
-    // Convert HTML to canvas using html2canvas would be ideal here
-    // For now, trigger download of a placeholder
-    canvas.toBlob((blob) => {
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'seating-chart.png';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        toast.success("Seating chart exported as PNG");
-      }
-    });
+    try {
+      const canvas = await html2canvas(canvasRef.current, {
+        scale: 3,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        allowTaint: true,
+      });
+      
+      const link = document.createElement('a');
+      link.download = 'seating-chart.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      toast.success("Seating chart exported as PNG");
+    } catch (error) {
+      console.error('Error exporting PNG:', error);
+      toast.error("Failed to export PNG");
+    }
   }, []);
 
   const exportToCSV = useCallback(() => {
@@ -209,6 +195,10 @@ const SeatingChart = () => {
               <Button variant="outline" onClick={exportToCSV} className="gap-2">
                 <FileText className="h-4 w-4" />
                 Export CSV
+              </Button>
+              <Button variant="outline" onClick={handleZoomOut} className="gap-2">
+                <ZoomOut className="h-4 w-4" />
+                Zoom Out
               </Button>
             </div>
           </div>
@@ -287,26 +277,32 @@ const SeatingChart = () => {
                 </div>
               </div>
               
-              <div 
-                ref={canvasRef}
-                className="relative bg-background/50 border-2 border-dashed border-border rounded-lg"
-                style={{ height: "600px", minHeight: "600px" }}
-              >
-                {tables.map((table) => (
-                  <TableComponent
-                    key={table.id}
-                    table={table}
-                    isEditMode={isEditMode}
-                    onPositionChange={updateTablePosition}
-                    onSeatClick={(seatNumber) => 
-                      isEditMode && setSelectedSeat({ tableId: table.id, seatNumber })
-                    }
-                    onTableNumberEdit={(tableId) => setEditingTableId(tableId)}
-                    onTableNumberUpdate={updateTableNumber}
-                    onTableDescriptionUpdate={updateTableDescription}
-                    isEditingNumber={editingTableId === table.id}
-                  />
-                ))}
+              <div className="overflow-auto">
+                <div 
+                  ref={canvasRef}
+                  className="relative bg-background/50 border-2 border-dashed border-border rounded-lg"
+                  style={{ 
+                    height: "600px", 
+                    minHeight: "600px",
+                    transform: `scale(${canvasScale})`,
+                    transformOrigin: 'top left',
+                    width: `${100 / canvasScale}%`,
+                  }}
+                >
+                  {tables.map((table) => (
+                    <TableComponent
+                      key={table.id}
+                      table={table}
+                      isEditMode={isEditMode}
+                      onPositionChange={updateTablePosition}
+                      onSeatClick={(seatNumber) => 
+                        isEditMode && setSelectedSeat({ tableId: table.id, seatNumber })
+                      }
+                      onTableNumberEdit={(tableId) => setEditingTableId(tableId)}
+                      onTableNumberUpdate={updateTableNumber}
+                      isEditingNumber={editingTableId === table.id}
+                    />
+                  ))}
                 
                 {tables.length === 0 && (
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -326,7 +322,8 @@ const SeatingChart = () => {
                       </Button>
                     </div>
                   </div>
-                )}
+                  )}
+                </div>
               </div>
             </Card>
           </div>

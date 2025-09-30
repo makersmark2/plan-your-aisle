@@ -9,7 +9,6 @@ interface TableComponentProps {
   onSeatClick: (seatNumber: number) => void;
   onTableNumberEdit: (tableId: string) => void;
   onTableNumberUpdate: (tableId: string, number: number) => void;
-  onTableDescriptionUpdate: (tableId: string, description: string) => void;
   isEditingNumber: boolean;
 }
 
@@ -20,13 +19,11 @@ export const TableComponent = ({
   onSeatClick, 
   onTableNumberEdit,
   onTableNumberUpdate,
-  onTableDescriptionUpdate,
   isEditingNumber 
 }: TableComponentProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [tempNumber, setTempNumber] = useState(table.number);
-  const [tempDescription, setTempDescription] = useState(table.description || '');
   const tableRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -129,7 +126,7 @@ export const TableComponent = ({
           key={i}
           className={`absolute w-6 h-6 rounded-full border-2 transition-all duration-200 flex items-center justify-center text-xs font-medium ${
             hasGuest 
-              ? 'bg-primary border-primary text-primary-foreground hover:scale-110' 
+              ? 'bg-sage border-sage text-white hover:scale-110' 
               : 'bg-background border-border hover:border-primary hover:scale-110'
           } ${isEditMode ? 'cursor-pointer' : 'cursor-default'}`}
           style={{
@@ -140,7 +137,7 @@ export const TableComponent = ({
             e.stopPropagation();
             if (isEditMode) onSeatClick(i);
           }}
-          title={!isEditMode && hasGuest ? `${guest.firstName} ${guest.lastName}` : `Seat ${i}`}
+          title={hasGuest && !isEditMode ? `${guest.firstName} ${guest.lastName}` : `Seat ${i}`}
         >
           {i}
         </div>
@@ -202,23 +199,6 @@ export const TableComponent = ({
             >
               Table {table.number}
             </Badge>
-          )}
-          {table.description && (
-            <div className="text-xs text-muted-foreground mt-1 max-w-full truncate">
-              {table.description}
-            </div>
-          )}
-          {isEditMode && !table.description && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const description = prompt('Enter table description:');
-                if (description) onTableDescriptionUpdate(table.id, description);
-              }}
-              className="text-xs text-muted-foreground mt-1 hover:text-foreground"
-            >
-              + Add description
-            </button>
           )}
         </div>
       </div>
